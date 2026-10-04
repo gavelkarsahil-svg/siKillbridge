@@ -1,29 +1,30 @@
-/* SkillBridge EXTRAS: login/sign-up, admin dashboard, profile page, light/dark mode.
-   No server and no Firebase: everything is saved in this browser (localStorage).
-   To use: add ONE line inside <head> of index.html:   <script src="extras.js"></script>   */
+const SUPABASE_URL = 'https://wqnxihaxtyafwgyymqit.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_xxxxxxxxxxxxxxxx';/* SkillBridge EXTRAS (Supabase version): real login, shared database, admin dashboard, profile page, light/dark mode.
+   Needs ONE line in <head> of index.html:  <script src="extras.js"></script>
+   Fill in the two Supabase values below. */
 (function () {
   'use strict';
 
-  /* ---------- Settings you can change ---------- */
-  const ADMIN_EMAILS = ['admin@skillbridge.com'];   // signing up with one of these emails creates an admin account
-  const REQUIRE_LOGIN_TO_LEARN = true;              // true = visitors must log in before watching a course
+  /* ---------- 1. YOUR SUPABASE SETTINGS (Project Settings > API) ---------- */
+  const SUPABASE_URL = 'PASTE_PROJECT_URL_HERE';        // looks like https://abcdxyz.supabase.co
+  const SUPABASE_KEY = 'PASTE_ANON_PUBLIC_KEY_HERE';    // the long "anon public" key (safe to put here)
+  const REQUIRE_LOGIN_TO_LEARN = true;                  // true = visitors must log in before watching a course
 
-  /* ---------- Small helpers ---------- */
-  const _set = Storage.prototype.setItem;           // original setItem (used for our own writes)
+  const CONFIGURED = /^https:\/\/[\w-]+\.supabase\.co/.test(SUPABASE_URL) && SUPABASE_KEY.length > 40;
+
+  /* ---------- Helpers ---------- */
+  const _set = Storage.prototype.setItem;               // original setItem, used for our own writes
   const get = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v === null ? d : v; } catch (e) { return d; } };
   const put = (k, v) => _set.call(localStorage, k, JSON.stringify(v));
   const $ = s => document.querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = t => t ? new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
-  const users = () => get('sb_users', {});
-  const saveUsers = u => put('sb_users', u);
-  const rnd = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
-  let me = null;                                    // email of the logged-in user
+  let sb = null, sdkError = '';                          // Supabase client
+  let uid = get('sb_uid', null), prof = get('sb_prof', null);   // cached login so pages can draw instantly
 
-  /* ---------- Theme (runs immediately so there is no flash) ---------- */
+  /* ---------- Theme ---------- */
   let theme = get('sb_theme', matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   document.documentElement.dataset.theme = theme;
-
   const css = document.createElement('style');
   css.textContent = `
   :root[data-theme=dark]{--ink:#E6EDF3;--bg:#0D1823;--card:#152433;--mut:#9DB0C0;--line:#274055}
@@ -39,63 +40,97 @@
   .xt th,.xt td{padding:10px;text-align:left;border-bottom:1px solid var(--line);font-size:.92rem;vertical-align:middle}
   .xs{overflow-x:auto;margin-bottom:28px}
   .xb{padding:5px 10px;font-size:.85rem}
-  .xtoast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:12px 20px;border-radius:8px;z-index:20}
+  .xtoast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:12px 20px;border-radius:8px;z-index:20;max-width:90vw}
   `;
   document.head.appendChild(css);
+  const toast = m => { const t = document.createElement('div'); t.className = 'xtoast'; t.setAttribute('role', 'status'); t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3500); };
 
-  const toast = m => { const t = document.createElement('div'); t.className = 'xtoast'; t.setAttribute('role', 'status'); t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3000); };
+  /* ---------- Progress sync: copies what the site saves into the database ---------- */
+  const toRow = (id, e) => ({ user_id: uid, course_id: id, course_title: e.course || id, done: e.done || [], total: e.total || 0, last: e.last || 0, completed: !!e.completed, cert_id: e.certId || null, completed_at: e.completedAt || null, enrolled_at: e.enrolledAt || new Date().toISOString(), updated_at: new Date().toISOString() });
+  const fromRow = r => ({ course: r.course_title, done: r.done || [], total: r.total, last: r.last, completed: r.completed, certId: r.cert_id || undefined, completedAt: r.completed_at || undefined, enrolledAt: r.enrolled_at });
+  const act = m => sb.from('activity').insert({ user_id: uid, message: m });
+  let timer = null, busy = false;
 
-  /* ---------- Session: load the logged-in user's progress into the site ---------- */
-  const sess = get('sb_session', null);
-  if (sess && users()[sess]) { me = sess; put('sb_enr', users()[sess].enr || {}); put('sb_name', users()[sess].name); }
-  else if (sess) localStorage.removeItem('sb_session');
-
-  /* Every time the site saves progress, copy it into the user's account and write an activity log */
-  function log(m) { const l = get('sb_log', []); l.unshift({ t: Date.now(), u: me, m }); put('sb_log', l.slice(0, 100)); }
+  async function push() {
+    if (!sb || !uid || busy) return;
+    busy = true;
+    const now = get('sb_enr', {}), was = get('sb_known', {});
+    try {
+      for (const id in now) {
+        if (JSON.stringify(now[id]) === JSON.stringify(was[id])) continue;
+        const r = await sb.from('enrollments').upsert(toRow(id, now[id])); if (r.error) throw r.error;
+        if (!was[id]) await act('enrolled in ' + (now[id].course || id));
+        else if (now[id].completed && !was[id].completed) await act('completed ' + (now[id].course || id));
+      }
+      for (const id in was) if (!now[id]) await sb.from('enrollments').delete().eq('user_id', uid).eq('course_id', id);
+      put('sb_known', now);
+    } catch (er) { console.warn('SkillBridge: could not save progress yet', er); }
+    busy = false;
+  }
   Storage.prototype.setItem = function (k, v) {
     _set.call(this, k, v);
-    if (this === localStorage && k === 'sb_enr' && me) {
-      let n; try { n = JSON.parse(v); } catch (e) { return; }
-      const U = users(), u = U[me]; if (!u) return;
-      const o = u.enr || {};
-      for (const id in n) {
-        if (!o[id]) log('enrolled in ' + (n[id].course || id));
-        else if (n[id].completed && !o[id].completed) log('completed ' + (n[id].course || id));
-      }
-      u.enr = n; saveUsers(U);
-    }
+    if (this === localStorage && k === 'sb_enr' && uid) { clearTimeout(timer); timer = setTimeout(push, 500); }
   };
 
-  /* ---------- Accounts ---------- */
-  async function hash(pw, salt) {
-    if (window.crypto && crypto.subtle) {
-      const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + pw));
-      return [...new Uint8Array(d)].map(x => x.toString(16).padStart(2, '0')).join('');
-    }
-    let h = 5381; for (const c of salt + pw) h = ((h << 5) + h + c.charCodeAt(0)) >>> 0; return String(h);
+  /* ---------- Talking to Supabase ---------- */
+  function loadSdk() {
+    return new Promise((ok, no) => {
+      if (window.supabase) return ok();
+      const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+      s.onload = ok; s.onerror = () => no(Error('Could not load the database library. Check your internet connection.'));
+      document.head.appendChild(s);
+    });
   }
-  function begin(email, msg) {
-    if (!me) put('sb_guest', { enr: get('sb_enr', {}), name: get('sb_name', '') });   // keep what a visitor did before logging in
-    const U = users(), u = U[email];
-    put('sb_enr', u.enr || {}); put('sb_name', u.name); put('sb_session', email);
-    me = email; log(msg); location.reload();
+  async function loadMine() {                           // fetch my profile + my courses from the database
+    const [p, e] = await Promise.all([sb.from('profiles').select('*').eq('id', uid).single(), sb.from('enrollments').select('*').eq('user_id', uid)]);
+    if (p.error || e.error) throw (p.error || e.error);
+    const enr = {}; e.data.forEach(r => enr[r.course_id] = fromRow(r));
+    return { prof: { name: p.data.name, email: p.data.email, role: p.data.role, login_count: p.data.login_count, created_at: p.data.created_at }, enr };
   }
+  function cache(m) { prof = m.prof; put('sb_uid', uid); put('sb_prof', prof); put('sb_name', prof.name); put('sb_enr', m.enr); put('sb_known', m.enr); }
+
+  async function init() {
+    if (!CONFIGURED) return;
+    try { await loadSdk(); sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch (e) { sdkError = e.message; return; }
+    const { data } = await sb.auth.getSession(), s = data && data.session;
+    if (!s) { if (uid) { clearLocal(); location.reload(); } return; }
+    uid = s.user.id;
+    try {
+      await push();                                     // upload anything saved while offline
+      const m = await loadMine();
+      const changed = JSON.stringify(m.enr) !== JSON.stringify(get('sb_enr', {}));
+      cache(m);
+      if (changed && !sessionStorage.getItem('sb_rl')) { sessionStorage.setItem('sb_rl', '1'); location.reload(); return; }
+      sessionStorage.removeItem('sb_rl');
+    } catch (e) { console.warn('SkillBridge: could not refresh', e); }
+    document.body.classList.add('xin'); paintHeader();
+  }
+  function clearLocal() { ['sb_uid', 'sb_prof', 'sb_known'].forEach(k => localStorage.removeItem(k)); uid = null; prof = null; }
+
   async function signup(name, email, pw) {
-    const U = users();
-    if (U[email]) throw Error('This email is already registered. Try logging in.');
-    const salt = rnd();
-    U[email] = { name, salt, hash: await hash(pw, salt), role: ADMIN_EMAILS.includes(email) ? 'admin' : 'student', created: Date.now(), lastLogin: Date.now(), loginCount: 1, enr: me ? {} : get('sb_enr', {}) };
-    saveUsers(U); begin(email, 'signed up');
+    const guest = get('sb_enr', {}), wasGuest = !uid;
+    const { data, error } = await sb.auth.signUp({ email, password: pw, options: { data: { name } } });
+    if (error) throw error;
+    if (!data.session) throw Error('Account created. Check your email for the confirmation link, then log in.');
+    if (wasGuest) put('sb_guest', { enr: guest, name: get('sb_name', '') });
+    uid = data.user.id; await sb.rpc('record_login');
+    put('sb_known', {}); put('sb_enr', guest); put('sb_uid', uid); put('sb_prof', { name, email, role: 'student' }); put('sb_name', name);
+    await push();                                       // visitor progress moves into the new account
+    location.reload();
   }
   async function login(email, pw) {
-    const U = users(), u = U[email];
-    if (!u || u.hash !== await hash(pw, u.salt)) throw Error('Wrong email or password.');
-    u.lastLogin = Date.now(); u.loginCount = (u.loginCount || 0) + 1; saveUsers(U); begin(email, 'logged in');
+    const wasGuest = !uid, guest = { enr: get('sb_enr', {}), name: get('sb_name', '') };
+    const { data, error } = await sb.auth.signInWithPassword({ email, password: pw });
+    if (error) throw error;
+    uid = data.user.id; await sb.rpc('record_login');
+    if (wasGuest) put('sb_guest', guest);
+    cache(await loadMine()); location.reload();
   }
-  function logout() {
+  async function logout() {
+    try { if (sb) await sb.auth.signOut(); } catch (e) {}
     const g = get('sb_guest', { enr: {}, name: '' });
-    put('sb_enr', g.enr); put('sb_name', g.name); localStorage.removeItem('sb_session');
-    me = null; location.hash = '#/'; location.reload();
+    clearLocal(); put('sb_enr', g.enr); put('sb_name', g.name);
+    location.hash = '#/'; location.reload();
   }
 
   /* ---------- Login / sign-up window ---------- */
@@ -109,7 +144,10 @@
     $('#xlink').onclick = e => { e.preventDefault(); setMode(m === 'login' ? 'sign' : 'login'); };
     $('#xerr').textContent = note || '';
   }
-  function openM(m, note) { setMode(m || 'login', note); $('#xm').hidden = false; $('#xemail').focus(); }
+  function openM(m, note) {
+    if (!CONFIGURED) return toast('The database is not connected yet. Add your Supabase URL and key at the top of extras.js.');
+    setMode(m || 'login', note); $('#xm').hidden = false; $('#xemail').focus();
+  }
   function buildModal() {
     const m = document.createElement('div'); m.className = 'modal'; m.id = 'xm'; m.hidden = true;
     m.innerHTML = `<form id="xf"><h2 id="xt" style="font-size:1.5rem"></h2>
@@ -123,92 +161,107 @@
     $('#xx').onclick = () => m.hidden = true;
     $('#xf').onsubmit = async e => {
       e.preventDefault(); $('#xerr').textContent = '';
+      if (!sb) { $('#xerr').textContent = sdkError || 'Still connecting to the database. Try again in a moment.'; return; }
       const em = $('#xemail').value.trim().toLowerCase(), pw = $('#xpass').value, nm = $('#xname').value.trim();
+      $('#xgo').disabled = true;
       try { if (mode === 'sign') { if (!nm) throw Error('Please type your full name.'); await signup(nm, em, pw); } else await login(em, pw); }
-      catch (er) { $('#xerr').textContent = er.message; }
+      catch (er) { $('#xerr').textContent = /Invalid login/i.test(er.message) ? 'Wrong email or password.' : er.message; $('#xgo').disabled = false; }
     };
   }
 
   /* ---------- Header buttons ---------- */
   function paintHeader() {
-    const u = me && users()[me];
+    const u = uid && prof;
     $('#xtra').innerHTML = `<button class="alt" id="xth" style="color:#fff" aria-label="Switch between light and dark mode">${theme === 'dark' ? '☀️ Light' : '🌙 Dark'}</button>` +
-      (u ? `<a href="#/profile">${esc(u.name)}</a>${u.role === 'admin' ? '<a href="#/admin">Admin</a>' : ''}<button class="alt" id="xlo" style="color:#fff">Log out</button>` : '<button id="xli">Log in</button>');
+      (u ? `<a href="#/profile">${esc(prof.name || prof.email)}</a>${prof.role === 'admin' ? '<a href="#/admin">Admin</a>' : ''}<button class="alt" id="xlo" style="color:#fff">Log out</button>` : '<button id="xli">Log in</button>');
     $('#xth').onclick = () => { theme = theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = theme; put('sb_theme', theme); paintHeader(); };
     if (u) $('#xlo').onclick = logout; else $('#xli').onclick = () => openM('login');
   }
 
   /* ---------- Admin dashboard (#/admin) ---------- */
-  function admin() {
-    const U = users(), cu = U[me], app = $('#app');
-    if (!cu || cu.role !== 'admin') { app.innerHTML = '<h1>Admin</h1><p>This page is only for administrators. Log in with an admin account.</p>'; return; }
-    const list = Object.entries(U).map(([email, u]) => ({ email, ...u }));
-    const enrs = list.flatMap(u => Object.entries(u.enr || {}).map(([id, e]) => ({ id, e })));
-    const done = enrs.filter(x => x.e.completed).length;
-    const byC = {}; enrs.forEach(x => { const c = byC[x.id] || (byC[x.id] = { name: x.e.course || x.id, n: 0, d: 0 }); c.n++; if (x.e.completed) c.d++; });
-    const rows = list.map(u => { const es = Object.values(u.enr || {}); const self = u.email === me;
-      return `<tr data-s="${esc((u.name + ' ' + u.email).toLowerCase())}"><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${u.role}</td><td>${fmt(u.created)}</td><td>${fmt(u.lastLogin)}</td><td>${u.loginCount || 0}</td><td>${es.length}</td><td>${es.filter(x => x.completed).length}</td>
-      <td>${self ? '<span class="tag">You</span>' : `<button class="alt xb" data-a="role" data-e="${esc(u.email)}" style="color:var(--ink)">${u.role === 'admin' ? 'Remove admin' : 'Make admin'}</button> <button class="alt xb" data-a="del" data-e="${esc(u.email)}" style="color:#b3261e">Delete</button>`}</td></tr>`; }).join('');
+  async function admin() {
+    const app = $('#app');
+    if (!uid || !prof || prof.role !== 'admin') { app.innerHTML = '<h1>Admin</h1><p>This page is only for administrators. Log in with an admin account.</p>'; return; }
+    app.innerHTML = '<h1>Admin dashboard</h1><p>Loading data…</p>';
+    for (let i = 0; i < 20 && !sb; i++) await new Promise(r => setTimeout(r, 250));
+    if (!sb) { app.innerHTML = '<h1>Admin dashboard</h1><p>' + esc(sdkError || 'Could not connect to the database.') + '</p>'; return; }
+    const [p, e, a] = await Promise.all([
+      sb.from('profiles').select('*').order('created_at'),
+      sb.from('enrollments').select('*'),
+      sb.from('activity').select('*').order('created_at', { ascending: false }).limit(15)]);
+    if (p.error || e.error || a.error) { app.innerHTML = '<h1>Admin dashboard</h1><p>Could not load the data: ' + esc((p.error || e.error || a.error).message) + '</p>'; return; }
+    const list = p.data, enrs = e.data, names = {}; list.forEach(u => names[u.id] = u.name || u.email);
+    const mine = id => enrs.filter(x => x.user_id === id);
+    const done = enrs.filter(x => x.completed).length;
+    const byC = {}; enrs.forEach(x => { const c = byC[x.course_id] || (byC[x.course_id] = { name: x.course_title || x.course_id, n: 0, d: 0 }); c.n++; if (x.completed) c.d++; });
+    const rows = list.map(u => { const self = u.id === uid;
+      return `<tr data-s="${esc(((u.name || '') + ' ' + u.email).toLowerCase())}"><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${u.role}</td><td>${fmt(u.created_at)}</td><td>${fmt(u.last_login)}</td><td>${u.login_count}</td><td>${mine(u.id).length}</td><td>${mine(u.id).filter(x => x.completed).length}</td>
+      <td>${self ? '<span class="tag">You</span>' : `<button class="alt xb" data-a="role" data-e="${u.id}" data-r="${u.role === 'admin' ? 'student' : 'admin'}" style="color:var(--ink)">${u.role === 'admin' ? 'Remove admin' : 'Make admin'}</button> <button class="alt xb" data-a="del" data-e="${u.id}" data-n="${esc(u.name || u.email)}" style="color:#b3261e">Delete</button>`}</td></tr>`; }).join('');
     const crow = Object.values(byC).map(c => `<tr><td>${esc(c.name)}</td><td>${c.n}</td><td>${c.d}</td><td>${Math.round(c.d / c.n * 100)}%</td></tr>`).join('') || '<tr><td colspan="4">No enrolments yet.</td></tr>';
-    const act = get('sb_log', []).slice(0, 15).map(a => `<tr><td>${new Date(a.t).toLocaleString('en-GB')}</td><td>${esc((U[a.u] || {}).name || a.u || 'Visitor')}</td><td>${esc(a.m)}</td></tr>`).join('') || '<tr><td colspan="3">No activity yet.</td></tr>';
+    const arow = a.data.map(x => `<tr><td>${new Date(x.created_at).toLocaleString('en-GB')}</td><td>${esc(names[x.user_id] || 'Deleted user')}</td><td>${esc(x.message)}</td></tr>`).join('') || '<tr><td colspan="3">No activity yet.</td></tr>';
     app.innerHTML = `<h1>Admin dashboard</h1>
     <div class="stats"><div><b>${list.length}</b>registered users</div><div><b>${enrs.length}</b>enrolments</div><div><b>${done}</b>certificates issued</div><div><b>${enrs.length ? Math.round(done / enrs.length * 100) : 0}%</b>completion rate</div></div>
     <h2>Users</h2><p><input id="xs" type="search" placeholder="Search by name or email" aria-label="Search users" style="max-width:320px;margin-right:10px"><button id="xcsv">Export CSV</button></p>
     <div class="xs"><table class="xt"><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th><th>Last login</th><th>Logins</th><th>Courses</th><th>Certificates</th><th>Actions</th></tr>${rows}</table></div>
     <h2>Course performance</h2><div class="xs"><table class="xt"><tr><th>Course</th><th>Enrolled</th><th>Completed</th><th>Rate</th></tr>${crow}</table></div>
-    <h2>Recent activity</h2><div class="xs"><table class="xt"><tr><th>When</th><th>Who</th><th>What</th></tr>${act}</table></div>
-    <p class="tag">Data comes from accounts created in this browser, because the site has no server.</p>`;
-    $('#xs').oninput = e => document.querySelectorAll('tr[data-s]').forEach(r => r.style.display = r.dataset.s.includes(e.target.value.toLowerCase()) ? '' : 'none');
+    <h2>Recent activity</h2><div class="xs"><table class="xt"><tr><th>When</th><th>Who</th><th>What</th></tr>${arow}</table></div>`;
+    $('#xs').oninput = ev => document.querySelectorAll('tr[data-s]').forEach(r => r.style.display = r.dataset.s.includes(ev.target.value.toLowerCase()) ? '' : 'none');
     $('#xcsv').onclick = () => {
-      const q = v => '"' + String(v).replace(/"/g, '""') + '"';
-      const csv = [['Name', 'Email', 'Role', 'Joined', 'Last login', 'Logins', 'Courses', 'Certificates'].map(q).join(',')].concat(list.map(u => { const es = Object.values(u.enr || {}); return [u.name, u.email, u.role, fmt(u.created), fmt(u.lastLogin), u.loginCount || 0, es.length, es.filter(x => x.completed).length].map(q).join(','); })).join('\n');
-      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'skillbridge-users.csv'; a.click();
+      const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+      const csv = [['Name', 'Email', 'Role', 'Joined', 'Last login', 'Logins', 'Courses', 'Certificates'].map(q).join(',')].concat(list.map(u => [u.name, u.email, u.role, fmt(u.created_at), fmt(u.last_login), u.login_count, mine(u.id).length, mine(u.id).filter(x => x.completed).length].map(q).join(','))).join('\n');
+      const l = document.createElement('a'); l.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); l.download = 'skillbridge-users.csv'; l.click();
     };
-    document.querySelectorAll('button[data-a]').forEach(b => b.onclick = () => {
-      const e = b.dataset.e, V = users(); if (!V[e]) return;
-      if (b.dataset.a === 'del') { if (!confirm('Delete ' + V[e].name + '\'s account and progress?')) return; delete V[e]; log('deleted account ' + e); }
-      else { V[e].role = V[e].role === 'admin' ? 'student' : 'admin'; log('changed role of ' + e); }
-      saveUsers(V); admin();
+    document.querySelectorAll('button[data-a]').forEach(b => b.onclick = async () => {
+      let r;
+      if (b.dataset.a === 'del') { if (!confirm('Delete ' + b.dataset.n + '\'s account and all their progress?')) return; r = await sb.rpc('delete_user', { target: b.dataset.e }); }
+      else r = await sb.rpc('set_role', { target: b.dataset.e, new_role: b.dataset.r });
+      if (r.error) toast(r.error.message); admin();
     });
   }
 
   /* ---------- Profile page (#/profile) ---------- */
   function profile() {
-    const u = me && users()[me], app = $('#app');
-    if (!u) { app.innerHTML = '<h1>My account</h1><p>Log in to see your account.</p>'; return openM('login'); }
-    const es = Object.values(u.enr || {});
+    const app = $('#app');
+    if (!uid || !prof) { app.innerHTML = '<h1>My account</h1><p>Log in to see your account.</p>'; return openM('login'); }
+    const es = Object.values(get('sb_enr', {}));
     app.innerHTML = `<h1>My account</h1>
-    <div class="stats"><div><b>${es.length}</b>courses started</div><div><b>${es.filter(x => x.completed).length}</b>certificates</div><div><b>${u.loginCount || 0}</b>logins</div></div>
-    <div class="card" style="max-width:420px"><h3>Profile</h3><p class="tag">${esc(me)} · ${u.role} · member since ${fmt(u.created)}</p>
-      <form id="pf"><label>Full name<input id="pname" value="${esc(u.name)}" required></label><button>Save name</button></form></div>
+    <div class="stats"><div><b>${es.length}</b>courses started</div><div><b>${es.filter(x => x.completed).length}</b>certificates</div><div><b>${prof.login_count || 1}</b>logins</div></div>
+    <div class="card" style="max-width:420px"><h3>Profile</h3><p class="tag">${esc(prof.email)} · ${prof.role} · member since ${fmt(prof.created_at)}</p>
+      <form id="pf"><label>Full name<input id="pname" value="${esc(prof.name)}" required></label><button>Save name</button></form></div>
     <div class="card" style="max-width:420px;margin-top:20px"><h3>Change password</h3>
-      <form id="pw"><label>Current password<input id="p0" type="password" required></label><label>New password (6+ characters)<input id="p1" type="password" minlength="6" required></label><div class="err" id="perr"></div><button>Update password</button></form></div>
+      <form id="pw"><label>New password (6+ characters)<input id="p1" type="password" minlength="6" required autocomplete="new-password"></label><div class="err" id="perr"></div><button>Update password</button></form></div>
     <p style="margin-top:24px"><button class="alt" id="pdel" style="color:#b3261e">Delete my account</button></p>`;
-    $('#pf').onsubmit = e => { e.preventDefault(); const U = users(); U[me].name = $('#pname').value.trim() || U[me].name; saveUsers(U); put('sb_name', U[me].name); location.reload(); };
-    $('#pw').onsubmit = async e => {
-      e.preventDefault(); const U = users(), x = U[me];
-      if (x.hash !== await hash($('#p0').value, x.salt)) { $('#perr').textContent = 'Your current password is not correct.'; return; }
-      x.salt = rnd(); x.hash = await hash($('#p1').value, x.salt); saveUsers(U); $('#pw').reset(); $('#perr').textContent = ''; toast('Password updated');
+    $('#pf').onsubmit = async e => {
+      e.preventDefault(); if (!sb) return toast('Still connecting. Try again in a moment.');
+      const n = $('#pname').value.trim(); if (!n) return;
+      const r = await sb.from('profiles').update({ name: n }).eq('id', uid); if (r.error) return toast(r.error.message);
+      await sb.auth.updateUser({ data: { name: n } }); prof.name = n; put('sb_prof', prof); put('sb_name', n); location.reload();
     };
-    $('#pdel').onclick = () => { if (!confirm('Delete your account and all your progress? This cannot be undone.')) return; const U = users(); delete U[me]; saveUsers(U); logout(); };
+    $('#pw').onsubmit = async e => {
+      e.preventDefault(); if (!sb) return toast('Still connecting. Try again in a moment.');
+      const r = await sb.auth.updateUser({ password: $('#p1').value });
+      if (r.error) { $('#perr').textContent = r.error.message; return; }
+      $('#pw').reset(); $('#perr').textContent = ''; toast('Password updated');
+    };
+    $('#pdel').onclick = async () => {
+      if (!sb || !confirm('Delete your account and all your progress? This cannot be undone.')) return;
+      const r = await sb.rpc('delete_my_account'); if (r.error) return toast(r.error.message); logout();
+    };
   }
 
   /* ---------- Page routing on top of the existing site ---------- */
   function gate() {
-    if (REQUIRE_LOGIN_TO_LEARN && !me && location.hash.startsWith('#/learn/')) { location.hash = '#/courses'; openM('login', 'Log in to start learning.'); return true; }
+    if (REQUIRE_LOGIN_TO_LEARN && !uid && location.hash.startsWith('#/learn/')) { location.hash = '#/courses'; openM('login', 'Log in to start learning.'); return true; }
     return false;
   }
-  function route() {
-    const h = location.hash;
-    if (h.startsWith('#/admin')) admin();
-    else if (h.startsWith('#/profile')) profile();
-  }
-  addEventListener('hashchange', () => { if (!gate()) setTimeout(route, 0); });     // runs before the site's own handler, then draws our pages after it
+  function route() { const h = location.hash; if (h.startsWith('#/admin')) admin(); else if (h.startsWith('#/profile')) profile(); }
+  addEventListener('hashchange', () => { if (!gate()) setTimeout(route, 0); });   // our handler runs first, then draws our pages after the site's own handler
 
   document.addEventListener('DOMContentLoaded', () => {
-    const h = $('header'), s = document.createElement('span'); s.id = 'xtra'; h.appendChild(s);
-    if (me) document.body.classList.add('xin');
+    const s = document.createElement('span'); s.id = 'xtra'; $('header').appendChild(s);
+    if (uid && prof) document.body.classList.add('xin');
     buildModal(); paintHeader();
     if (!gate()) setTimeout(route, 0);
+    init();
   });
 })();
