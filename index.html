@@ -1,4 +1,366 @@
-<!DOCTYPE html>
+<!DOCTYPE html><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SkillBridge | Free digital skills courses</title>
+<meta name="description" content="Free video courses in design, coding, marketing and IT, with certificates.">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#12263A;--bg:#EEF3F6;--card:#fff;--teal:#0E7C7B;--sun:#FFC93C;--mut:#5b6b7a;--line:#d5dee5}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.55 system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+h1,h2,h3,.logo{font-family:'Bricolage Grotesque',system-ui,sans-serif;line-height:1.1;margin:0 0 .5em}
+a{color:var(--teal)}
+header{display:flex;align-items:center;gap:20px;padding:14px 5vw;background:var(--ink);flex-wrap:wrap}
+header a{color:#fff;text-decoration:none}
+.logo{font-size:1.4rem;font-weight:800;margin:0 auto 0 0}
+.logo span{color:var(--sun)}
+button,.btn{font:inherit;font-weight:600;background:var(--teal);color:#fff;border:0;border-radius:6px;padding:10px 18px;cursor:pointer;text-decoration:none;display:inline-block}
+button.alt{background:transparent;border:2px solid currentColor;color:inherit}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+main{padding:32px 5vw;max-width:1150px;margin:auto;min-height:70vh}
+.hero{padding:40px 0 30px}
+.hero h1{font-size:clamp(2.4rem,7vw,4.6rem);font-weight:800;max-width:14ch}
+.hero p{max-width:55ch;color:var(--mut);font-size:1.15rem}
+.span{display:flex;gap:4px;margin:14px 0;max-width:520px}
+.span i{flex:1;height:10px;background:var(--line);border-radius:2px}
+.span i.on{background:var(--teal)}
+.span.big i{height:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px}
+.card .ico{font-size:2rem}
+.tag{font-size:.88rem;color:var(--mut)}
+.bar{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 24px}
+.bar input{max-width:320px;margin:0}
+.chip{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.chip.on{background:var(--ink);color:#fff}
+.play{display:grid;grid-template-columns:2fr 1fr;gap:24px}
+@media(max-width:800px){.play{grid-template-columns:1fr}}
+.vid{aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden}
+.vid iframe,.vid>div{width:100%;height:100%}
+.list{list-style:none;margin:0;padding:0}
+.list li{display:flex;gap:10px;align-items:center;padding:12px;border:1px solid var(--line);background:var(--card);margin-bottom:-1px}
+.list.pick li{cursor:pointer}
+.list li.cur{border-left:5px solid var(--sun);font-weight:600}
+.list li .n{width:26px;height:26px;border-radius:50%;background:var(--line);display:grid;place-items:center;font-size:.8rem;flex:none}
+.list li.ok .n{background:var(--teal);color:#fff}
+.list li .tag{margin-left:auto}
+.banner{background:var(--sun);padding:16px 20px;border-radius:10px;margin:16px 0;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.stats{display:flex;gap:16px;flex-wrap:wrap;margin:16px 0}
+.stats div{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 20px}
+.stats b{display:block;font-size:1.8rem;font-family:'Bricolage Grotesque',sans-serif}
+canvas{max-width:100%;border:1px solid var(--line);background:#fff}
+.modal{position:fixed;inset:0;background:rgba(18,38,58,.7);display:grid;place-items:center;z-index:9}
+.modal[hidden]{display:none}
+.modal form{background:#fff;padding:28px;border-radius:12px;width:min(380px,92vw);max-height:94vh;overflow:auto}
+input{width:100%;padding:10px;margin:6px 0 14px;border:1px solid var(--line);border-radius:6px;font:inherit}
+.err{color:#b3261e;min-height:1.4em;font-size:.9rem}
+.err.ok{color:var(--teal)}
+.tabs{display:flex;gap:8px;margin-bottom:14px}
+.tabs button{flex:1;background:var(--bg);color:var(--ink)}
+.tabs button.on{background:var(--ink);color:#fff}
+footer{padding:24px 5vw;color:var(--mut);font-size:.9rem;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+<header>
+  <a class="logo" href="#/">Skill<span>Bridge</span></a>
+  <a href="#/courses">Courses</a>
+  <a href="#/dashboard">My learning</a>
+  <span id="auth"></span>
+</header>
+<main id="app"></main>
+<footer>SkillBridge is a fictional program built for a college coursework project.</footer>
+
+<div class="modal" id="modal" hidden>
+  <form id="authForm">
+    <div class="tabs">
+      <button type="button" id="tLogin" class="on">Log in</button>
+      <button type="button" id="tSign">Sign up</button>
+    </div>
+    <button type="button" class="alt" id="gBtn" style="width:100%;color:var(--ink)">Continue with Google</button>
+    <p class="tag" style="text-align:center">or use your email</p>
+    <div id="nameRow" hidden><label>Full name (printed on your certificate)<input id="fName" autocomplete="name"></label></div>
+    <label>Email<input id="fEmail" type="email" required autocomplete="email"></label>
+    <label>Password (6+ characters)<input id="fPass" type="password" required minlength="6" autocomplete="current-password"></label>
+    <div class="err" id="err" role="alert"></div>
+    <button id="fGo">Log in</button>
+    <button type="button" class="alt" id="fCancel" style="color:var(--ink);margin-left:8px">Cancel</button>
+    <p><a href="#" id="forgot">Forgot your password?</a></p>
+  </form>
+</div>
+<script type="module">
+// Reads one YouTube link and says what it is:
+//   {list: 'PL...'}  -> a playlist (all its videos play in order)
+//   {id: 'abc...'}   -> a single video
+//   null             -> not a valid YouTube link
+const isId = s => /^[\w-]{11}$/.test(s || '');
+
+function ytId(input) {
+  const s = String(input || '').trim();
+  if (isId(s)) return s;
+  try {
+    const u = new URL(/^https?:\/\//i.test(s) ? s : 'https://' + s);
+    const host = u.hostname.replace(/^(www\.|m\.|music\.)/, '');
+    let id = null;
+    if (host === 'youtu.be') id = u.pathname.slice(1).split('/')[0];
+    else if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+      id = u.searchParams.get('v');
+      if (!id) { const m = u.pathname.match(/^\/(embed|shorts|live|v)\/([\w-]{11})/); if (m) id = m[2]; }
+    }
+    return isId(id) ? id : null;
+  } catch (e) { return null; }
+}
+
+function ytInfo(input) {
+  const s = String(input || '').trim();
+  try {
+    const u = new URL(/^https?:\/\//i.test(s) ? s : 'https://' + s);
+    const list = u.searchParams.get('list');
+    // playlist links; "RD..." are auto-made mixes that cannot be embedded, so they are treated as single videos
+    if (list && /^[\w-]{10,}$/.test(list) && !list.startsWith('RD')) return { list };
+  } catch (e) {}
+  const id = ytId(s);
+  return id ? { id } : null;
+}
+
+// ONE YOUTUBE LINK PER COURSE
+// Paste your link in the `link` line of each course. It can be:
+//   - a playlist link  (https://www.youtube.com/playlist?list=PL...)  -> every video in the playlist is shown as a lesson
+//   - a single video   (https://www.youtube.com/watch?v=... or https://youtu.be/...)  -> the course is that one video
+// `len` and `learn` are only the text shown on the course page. Edit them to match your video.
+
+const COURSES = [
+  { id: 'graphic-design', ico: '🎨', cat: 'Design', level: 'Beginner', by: 'Your instructor name', len: 'About 4 hours',
+    title: 'Graphic design fundamentals',
+    desc: 'Learn layout, colour and typography, then design a logo you can put in a portfolio.',
+    learn: ['Layout and composition', 'Colour and typography', 'Working with images', 'Designing a logo'],
+    link: 'PASTE_YOUTUBE_LINK_HERE' },
+
+  { id: 'web-development', ico: '💻', cat: 'Development', level: 'Beginner', by: 'Your instructor name', len: 'About 6 hours',
+    title: 'Web development and coding',
+    desc: 'HTML, CSS and JavaScript step by step, finishing with a live website on GitHub Pages.',
+    learn: ['HTML structure', 'Styling with CSS', 'JavaScript basics', 'Publishing a website'],
+    link: 'PASTE_YOUTUBE_LINK_HERE' },
+
+  { id: 'digital-marketing', ico: '📣', cat: 'Marketing', level: 'Beginner', by: 'Your instructor name', len: 'About 4 hours',
+    title: 'Digital marketing',
+    desc: 'Plan social, search and email campaigns and read the numbers that show what works.',
+    learn: ['The marketing funnel', 'Social media plans', 'Search and SEO basics', 'Reading analytics'],
+    link: 'PASTE_YOUTUBE_LINK_HERE' },
+
+  { id: 'ui-ux-design', ico: '📱', cat: 'Design', level: 'Beginner', by: 'Your instructor name', len: 'About 5 hours',
+    title: 'UI and UX design',
+    desc: 'Research users, sketch wireframes and design app screens people find easy to use.',
+    learn: ['User research', 'Wireframes', 'Visual interface design', 'Prototyping in Figma'],
+    link: 'PASTE_YOUTUBE_LINK_HERE' },
+
+  { id: 'cyber-security', ico: '🔒', cat: 'Security', level: 'Beginner', by: 'Your instructor name', len: 'About 4 hours',
+    title: 'Cyber security fundamentals',
+    desc: 'Understand common attacks and learn the habits that keep people and systems safe.',
+    learn: ['Common cyber attacks', 'Passwords and phishing', 'Malware and protection', 'Staying safe online'],
+    link: 'PASTE_YOUTUBE_LINK_HERE' },
+
+  { id: 'it-networking', ico: '🛠️', cat: 'IT', level: 'Intermediate', by: 'Your instructor name', len: 'About 5 hours',
+    title: 'IT support and networking',
+    desc: 'Troubleshoot computers, understand how networks work and help users solve problems.',
+    learn: ['How computers work', 'Networking basics', 'Troubleshooting steps', 'Helping users'],
+    link: 'PASTE_YOUTUBE_LINK_HERE' }
+];
+
+/* SkillBridge, no-database version: progress is saved in this browser (localStorage). One YouTube link per course. */
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const ls = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v === null ? d : v; } catch (e) { return d; } };
+const st = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+
+const S = { enr: ls('sb_enr', {}), name: ls('sb_name', '') };
+const F = { q: '', cat: 'All' };
+const CATS = ['All', ...new Set(COURSES.map(c => c.cat))];
+const course = id => COURSES.find(c => c.id === id);
+const save = () => st('sb_enr', S.enr);
+let player = null, CUR = { cid: null, i: 0 }, IDS = [], FALLBACK = false;
+
+COURSES.forEach(c => c.yt = ytInfo(c.link));   // read each course link once
+
+/* YouTube IFrame API */
+const ytReady = new Promise(r => window.onYouTubeIframeAPIReady = r);
+const yt = document.createElement('script'); yt.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(yt);
+
+
+function render() {
+  $('#auth').innerHTML = `<button class="alt" id="nm" style="color:#fff">${S.name ? esc(S.name) : 'Set your name'}</button>`;
+  $('#nm').onclick = askName;
+  player = null;
+  const [, r, a] = (location.hash || '#/').slice(1).split('/');
+  if (r === 'courses') return catalogue();
+  if (r === 'course') return detail(course(a));
+  if (r === 'learn') return learn(course(a));
+  if (r === 'dashboard') return dash();
+  if (r === 'cert') return certPage(course(a));
+  home();
+}
+function askName() {
+  const n = (prompt('Your full name (it is printed on your certificate):', S.name) || '').trim();
+  if (n) { S.name = n; st('sb_name', n); render(); }
+  return S.name;
+}
+
+/* ---------- Pages ---------- */
+const bar = (c, big) => {
+  const e = S.enr[c.id] || {}, n = e.total || 1, d = e.done || [];
+  return `<div class="span ${big ? 'big' : ''}" role="img" aria-label="${d.length} of ${e.total || 'all'} videos done">${Array.from({ length: n }, (_, i) => `<i class="${d.includes(i) ? 'on' : ''}"></i>`).join('')}</div>`;
+};
+const card = c => `<div class="card"><div class="ico">${c.ico}</div><h3>${c.title}</h3><p class="tag">${c.cat} · ${c.level} · ${c.len}</p><p>${c.desc}</p>${S.enr[c.id] ? bar(c) : ''}<a class="btn" href="#/course/${c.id}">${S.enr[c.id] ? 'Continue' : 'View course'}</a></div>`;
+
+function home() {
+  $('#app').innerHTML = `<section class="hero"><h1>Learn a digital skill. Get hired.</h1><p>Free video courses for young people looking for their first digital job. Watch the lessons right here and earn a certificate.</p><a class="btn" href="#/courses">Browse courses</a></section><h2>Popular courses</h2><div class="grid">${COURSES.slice(0, 3).map(card).join('')}</div>`;
+}
+
+function catalogue() {
+  $('#app').innerHTML = `<h1>All courses</h1><div class="bar"><input id="q" type="search" placeholder="Search courses" aria-label="Search courses" value="${esc(F.q)}">${CATS.map(k => `<button class="chip ${k === F.cat ? 'on' : ''}" data-c="${k}">${k}</button>`).join('')}</div><div class="grid" id="grid"></div>`;
+  const paintGrid = () => {
+    const l = COURSES.filter(c => (F.cat === 'All' || c.cat === F.cat) && (c.title + c.desc).toLowerCase().includes(F.q.toLowerCase()));
+    $('#grid').innerHTML = l.length ? l.map(card).join('') : '<p>No course matches your search. Try a different word or category.</p>';
+  };
+  paintGrid();
+  $('#q').oninput = e => { F.q = e.target.value; paintGrid(); };
+  document.querySelectorAll('.chip').forEach(b => b.onclick = () => { F.cat = b.dataset.c; catalogue(); });
+}
+
+function detail(c) {
+  if (!c) return location.hash = '#/courses';
+  const e = S.enr[c.id];
+  $('#app').innerHTML = `<h1>${c.ico} ${c.title}</h1><p class="tag">${c.cat} · ${c.level} · by ${esc(c.by)} · ${c.len}</p><p style="max-width:60ch">${c.desc}</p>
+  ${e ? bar(c, true) + (e.completed ? `<div class="banner"><strong>Course complete.</strong><a class="btn" href="#/cert/${c.id}">View certificate</a></div>` : '') : ''}
+  <p><button id="go">${e ? (e.completed ? 'Watch again' : 'Continue learning') : 'Start course'}</button></p>
+  <h2>What you will learn</h2><ul class="list">${c.learn.map(t => `<li><span class="n">✓</span>${esc(t)}</li>`).join('')}</ul>`;
+  $('#go').onclick = () => {
+    if (!e) { S.enr[c.id] = { course: c.title, done: [], total: c.yt && c.yt.list ? 0 : 1, last: 0, completed: false, enrolledAt: new Date().toISOString() }; save(); }
+    location.hash = '#/learn/' + c.id;
+  };
+}
+
+/* ---------- Video player ---------- */
+function learn(c) {
+  if (!c) return location.hash = '#/courses';
+  if (!S.enr[c.id]) return location.hash = '#/course/' + c.id;
+  CUR = { cid: c.id, i: S.enr[c.id].last || 0 };
+  IDS = []; FALLBACK = false;
+  $('#app').innerHTML = `<p><a href="#/course/${c.id}">← ${esc(c.title)}</a></p><h1>${esc(c.title)}</h1><p class="tag" id="lesson"></p><div id="prog"></div>
+  <div class="play"><div><div class="vid"><div id="player"></div></div><p class="err" id="verr" role="alert"></p>
+  <p><button id="mark"></button> <span class="tag">Videos in a playlist play one after another.</span></p></div>
+  <div><h3>Videos in this course</h3><ul class="list pick" id="pl"></ul></div></div>`;
+  paint(c);
+  $('#mark').onclick = () => FALLBACK ? finishAll(c) : complete(CUR.i);
+  mount(c);
+}
+
+function mount(c) {
+  const info = c.yt;
+  if (!info) { $('.vid').innerHTML = '<p style="color:#fff;padding:20px">This course\'s YouTube link is not valid. Check the link in js/courses.js.</p>'; $('#mark').hidden = true; return; }
+  if (info.id) { IDS = [info.id]; paint(c); }
+  const fallback = () => {
+    if (!$('.vid')) return;
+    FALLBACK = true;
+    const src = info.list ? `https://www.youtube-nocookie.com/embed/videoseries?list=${info.list}&rel=0` : `https://www.youtube-nocookie.com/embed/${info.id}?rel=0`;
+    $('.vid').innerHTML = `<iframe style="border:0" src="${src}" title="${esc(c.title)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
+    paint(c);
+  };
+  Promise.race([ytReady, new Promise(r => setTimeout(r, 5000))]).then(() => {
+    if (!$('#player')) return;                                    // user left the page
+    if (!window.YT || !window.YT.Player) return fallback();       // YouTube script blocked or slow: plain embed
+    const vars = { rel: 0, modestbranding: 1, playsinline: 1 };
+    const cfg = info.list ? { playerVars: { ...vars, listType: 'playlist', list: info.list, index: CUR.i } } : { videoId: info.id, playerVars: vars };
+    player = new YT.Player('player', {
+      width: '100%', height: '100%', ...cfg,
+      events: {
+        onReady: () => { if (info.list) loadList(c); },
+        onStateChange: ev => {
+          if (ev.data === 1) {                                    // a video started playing
+            if (info.list) CUR.i = Math.max(0, player.getPlaylistIndex());
+            S.enr[c.id].last = CUR.i; save(); paint(c);
+          }
+          if (ev.data === 0) complete(CUR.i);                     // a video ended
+        },
+        onError: () => { $('#verr').textContent = 'This video cannot be played here. It may be private, removed, or the owner turned off embedding.'; }
+      }
+    });
+  });
+}
+function loadList(c, tries = 0) {                                  // ask the player which videos are in the playlist
+  const a = player && player.getPlaylist && player.getPlaylist();
+  if (a && a.length) { IDS = a; setTotal(c, a.length); }
+  else if (tries < 20) setTimeout(() => loadList(c, tries + 1), 500);
+}
+function setTotal(c, n) {
+  const e = S.enr[c.id];
+  e.total = n; e.done = e.done.filter(i => i < n);
+  if (e.done.length >= n && !e.completed) finish(e);
+  save(); paint(c);
+}
+function finish(e) { e.completed = true; e.certId = 'SB-' + Date.now().toString(36).toUpperCase(); e.completedAt = new Date().toISOString(); }
+function complete(i) {
+  const c = course(CUR.cid), e = S.enr[c.id];
+  if (!e.total || e.done.includes(i)) return;
+  e.done.push(i);
+  if (e.done.length >= e.total && !e.completed) finish(e);
+  save(); paint(c);
+}
+function finishAll(c) {                                            // used only when YouTube's script is blocked
+  const e = S.enr[c.id]; e.total = e.total || 1;
+  e.done = Array.from({ length: e.total }, (_, i) => i);
+  if (!e.completed) finish(e);
+  save(); paint(c);
+}
+function paint(c) {
+  const e = S.enr[c.id];
+  $('#lesson').textContent = FALLBACK ? 'Use the playlist inside the video player.' : `Video ${CUR.i + 1} of ${e.total || '…'}`;
+  $('#mark').textContent = FALLBACK ? 'I finished this course' : 'Mark this video as done';
+  $('#prog').innerHTML = bar(c, true) + (e.completed ? `<div class="banner"><strong>Course complete.</strong> Your certificate is ready.<a class="btn" href="#/cert/${c.id}">View certificate</a></div>` : '');
+  $('#pl').innerHTML = FALLBACK ? '<li>The video list is inside the player above.</li>' : IDS.length ? IDS.map((id, i) =>
+    `<li tabindex="0" data-i="${i}" class="${i === CUR.i ? 'cur' : ''} ${e.done.includes(i) ? 'ok' : ''}"><span class="n">${e.done.includes(i) ? '✓' : i + 1}</span><img src="https://i.ytimg.com/vi/${id}/default.jpg" alt="" width="64" style="border-radius:4px"><span>Video ${i + 1}</span></li>`).join('') : '<li>Loading videos…</li>';
+  document.querySelectorAll('#pl li[data-i]').forEach(li => {
+    const go = () => { const i = +li.dataset.i; if (c.yt.list && player && player.playVideoAt) { CUR.i = i; player.playVideoAt(i); paint(c); } };
+    li.onclick = go; li.onkeydown = ev => { if (ev.key === 'Enter') go(); };
+  });
+}
+
+/* ---------- Dashboard and certificate ---------- */
+function dash() {
+  const mine = COURSES.filter(c => S.enr[c.id]), certs = mine.filter(c => S.enr[c.id].completed);
+  $('#app').innerHTML = `<h1>My learning</h1><div class="stats"><div><b>${mine.length}</b>courses started</div><div><b>${certs.length}</b>certificates earned</div></div>
+  <h2>My courses</h2>${mine.length ? `<div class="grid">${mine.map(card).join('')}</div>` : '<p>You have not started a course yet. <a href="#/courses">Find a course</a></p>'}
+  ${certs.length ? `<h2 style="margin-top:32px">My certificates</h2><ul class="list">${certs.map(c => `<li>${esc(c.title)}<span class="tag"><a href="#/cert/${c.id}">Open</a></span></li>`).join('')}</ul>` : ''}`;
+}
+
+function certPage(c) {
+  const e = c && S.enr[c.id];
+  if (!e || !e.completed) return $('#app').innerHTML = '<h1>Certificate</h1><p>Finish every video in a course to unlock its certificate.</p>';
+  if (!S.name && !askName()) return $('#app').innerHTML = '<h1>Certificate</h1><p>Set your name with the button at the top, then reopen this page.</p>';
+  $('#app').innerHTML = `<h1>Your certificate</h1><canvas id="cv" width="1200" height="850"></canvas><p><button id="dl">Download PNG</button> <button class="alt" onclick="print()" style="color:var(--ink)">Print</button></p>`;
+  const x = $('#cv').getContext('2d'); x.textAlign = 'center';
+  const t = (txt, y, font, col) => { x.font = font; x.fillStyle = col; x.fillText(txt, 600, y); };
+  x.fillStyle = '#fff'; x.fillRect(0, 0, 1200, 850);
+  x.strokeStyle = '#12263A'; x.lineWidth = 14; x.strokeRect(30, 30, 1140, 790);
+  x.strokeStyle = '#FFC93C'; x.lineWidth = 4; x.strokeRect(58, 58, 1084, 734);
+  const H = '800 54px "Bricolage Grotesque",sans-serif', P = '28px system-ui,sans-serif';
+  t('SkillBridge', 150, H, '#12263A'); t('Certificate of completion', 215, P, '#12263A'); t('This certifies that', 310, P, '#12263A');
+  t(S.name, 410, '800 68px "Bricolage Grotesque",sans-serif', '#12263A');
+  t('has completed all videos in the course', 490, P, '#12263A'); t(c.title, 565, '800 46px "Bricolage Grotesque",sans-serif', '#0E7C7B');
+  t('Completed on ' + new Date(e.completedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }), 670, '22px system-ui,sans-serif', '#5b6b7a');
+  t('Certificate ID: ' + e.certId, 710, '22px system-ui,sans-serif', '#5b6b7a');
+  $('#dl').onclick = () => { const a = document.createElement('a'); a.download = `SkillBridge-${c.id}-certificate.png`; a.href = $('#cv').toDataURL('image/png'); a.click(); };
+}
+
+/* ---------- Start (must stay at the very end) ---------- */
+addEventListener('hashchange', render);
+render();
+</script>
+</body>
+</html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
