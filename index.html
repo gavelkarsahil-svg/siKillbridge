@@ -1,4 +1,4 @@
-<!DOCTYPE html><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -136,37 +136,37 @@ const COURSES = [
     title: 'Graphic design fundamentals',
     desc: 'Learn layout, colour and typography, then design a logo you can put in a portfolio.',
     learn: ['Layout and composition', 'Colour and typography', 'Working with images', 'Designing a logo'],
-    link: 'PASTE_YOUTUBE_LINK_HERE' },
+    link: 'https://youtube.com/playlist?list=PLgGbWId6zgaXiWYDAcJbXzBNlAnYg7pgL&si=IoKXfEIKZG-QrWym' },
 
   { id: 'web-development', ico: '💻', cat: 'Development', level: 'Beginner', by: 'Your instructor name', len: 'About 6 hours',
     title: 'Web development and coding',
     desc: 'HTML, CSS and JavaScript step by step, finishing with a live website on GitHub Pages.',
     learn: ['HTML structure', 'Styling with CSS', 'JavaScript basics', 'Publishing a website'],
-    link: 'PASTE_YOUTUBE_LINK_HERE' },
+    link: 'https://youtube.com/playlist?list=PLfqMhTWNBTe3H6c9OGXb5_6wcc1Mca52n&si=hvJrqus1Nh4GapIn' },
 
   { id: 'digital-marketing', ico: '📣', cat: 'Marketing', level: 'Beginner', by: 'Your instructor name', len: 'About 4 hours',
     title: 'Digital marketing',
     desc: 'Plan social, search and email campaigns and read the numbers that show what works.',
     learn: ['The marketing funnel', 'Social media plans', 'Search and SEO basics', 'Reading analytics'],
-    link: 'PASTE_YOUTUBE_LINK_HERE' },
+    link: 'https://youtu.be/XuUbLHIRyuM?si=GQ65tWcWlESfsSLl' },
 
   { id: 'ui-ux-design', ico: '📱', cat: 'Design', level: 'Beginner', by: 'Your instructor name', len: 'About 5 hours',
     title: 'UI and UX design',
     desc: 'Research users, sketch wireframes and design app screens people find easy to use.',
     learn: ['User research', 'Wireframes', 'Visual interface design', 'Prototyping in Figma'],
-    link: 'PASTE_YOUTUBE_LINK_HERE' },
+    link: 'https://youtube.com/playlist?list=PLdvOfoe7PXT0ouChAnR1nHlT8BJIo5hP_&si=2EzoeYg0Zo8V5hqF' },
 
   { id: 'cyber-security', ico: '🔒', cat: 'Security', level: 'Beginner', by: 'Your instructor name', len: 'About 4 hours',
     title: 'Cyber security fundamentals',
     desc: 'Understand common attacks and learn the habits that keep people and systems safe.',
     learn: ['Common cyber attacks', 'Passwords and phishing', 'Malware and protection', 'Staying safe online'],
-    link: 'PASTE_YOUTUBE_LINK_HERE' },
+    link: 'https://youtube.com/playlist?list=PLlgLmuG_Kgba6K93PuVuf9aP_UFnm7mCl&si=EBoYU3x4B2DAqQ4C' },
 
   { id: 'it-networking', ico: '🛠️', cat: 'IT', level: 'Intermediate', by: 'Your instructor name', len: 'About 5 hours',
     title: 'IT support and networking',
     desc: 'Troubleshoot computers, understand how networks work and help users solve problems.',
     learn: ['How computers work', 'Networking basics', 'Troubleshooting steps', 'Helping users'],
-    link: 'PASTE_YOUTUBE_LINK_HERE' }
+    link: 'https://youtube.com/playlist?list=PLS0spxc8nUsARM_Z8Ou9sXo_HzWA89tYX&si=QNIjqPGWmzsTvJGp' }
 ];
 
 /* SkillBridge, no-database version: progress is saved in this browser (localStorage). One YouTube link per course. */
@@ -251,7 +251,7 @@ function learn(c) {
   IDS = []; FALLBACK = false;
   $('#app').innerHTML = `<p><a href="#/course/${c.id}">← ${esc(c.title)}</a></p><h1>${esc(c.title)}</h1><p class="tag" id="lesson"></p><div id="prog"></div>
   <div class="play"><div><div class="vid"><div id="player"></div></div><p class="err" id="verr" role="alert"></p>
-  <p><button id="mark"></button> <span class="tag">Videos in a playlist play one after another.</span></p></div>
+  <p><button id="mark" style="display:none"></button> <span class="tag" id="note"></span></p></div>
   <div><h3>Videos in this course</h3><ul class="list pick" id="pl"></ul></div></div>`;
   paint(c);
   $('#mark').onclick = () => FALLBACK ? finishAll(c) : complete(CUR.i);
@@ -260,7 +260,7 @@ function learn(c) {
 
 function mount(c) {
   const info = c.yt;
-  if (!info) { $('.vid').innerHTML = '<p style="color:#fff;padding:20px">This course\'s YouTube link is not valid. Check the link in js/courses.js.</p>'; $('#mark').hidden = true; return; }
+  if (!info) { $('.vid').innerHTML = '<p style="color:#fff;padding:20px">This course\'s YouTube link is not valid. Check the link in js/courses.js.</p>'; paint(c); return; }
   if (info.id) { IDS = [info.id]; paint(c); }
   const fallback = () => {
     if (!$('.vid')) return;
@@ -317,10 +317,12 @@ function finishAll(c) {                                            // used only 
 }
 function paint(c) {
   const e = S.enr[c.id];
-  $('#lesson').textContent = FALLBACK ? 'Use the playlist inside the video player.' : `Video ${CUR.i + 1} of ${e.total || '…'}`;
-  $('#mark').textContent = FALLBACK ? 'I finished this course' : 'Mark this video as done';
+  $('#lesson').textContent = !c.yt ? '' : FALLBACK ? 'Use the playlist inside the video player.' : `Video ${CUR.i + 1} of ${e.total || '…'}`;
+  $('#mark').textContent = 'I finished this course';
+  $('#mark').style.display = FALLBACK ? '' : 'none';   // manual button only when YouTube's player cannot load
+  $('#note').textContent = !c.yt ? '' : FALLBACK ? '' : 'Your progress is saved automatically when each video ends.';
   $('#prog').innerHTML = bar(c, true) + (e.completed ? `<div class="banner"><strong>Course complete.</strong> Your certificate is ready.<a class="btn" href="#/cert/${c.id}">View certificate</a></div>` : '');
-  $('#pl').innerHTML = FALLBACK ? '<li>The video list is inside the player above.</li>' : IDS.length ? IDS.map((id, i) =>
+  $('#pl').innerHTML = FALLBACK ? '<li>The video list is inside the player above.</li>' : !c.yt ? '<li>No valid video yet. Add the YouTube link for this course.</li>' : IDS.length ? IDS.map((id, i) =>
     `<li tabindex="0" data-i="${i}" class="${i === CUR.i ? 'cur' : ''} ${e.done.includes(i) ? 'ok' : ''}"><span class="n">${e.done.includes(i) ? '✓' : i + 1}</span><img src="https://i.ytimg.com/vi/${id}/default.jpg" alt="" width="64" style="border-radius:4px"><span>Video ${i + 1}</span></li>`).join('') : '<li>Loading videos…</li>';
   document.querySelectorAll('#pl li[data-i]').forEach(li => {
     const go = () => { const i = +li.dataset.i; if (c.yt.list && player && player.playVideoAt) { CUR.i = i; player.playVideoAt(i); paint(c); } };
@@ -333,7 +335,9 @@ function dash() {
   const mine = COURSES.filter(c => S.enr[c.id]), certs = mine.filter(c => S.enr[c.id].completed);
   $('#app').innerHTML = `<h1>My learning</h1><div class="stats"><div><b>${mine.length}</b>courses started</div><div><b>${certs.length}</b>certificates earned</div></div>
   <h2>My courses</h2>${mine.length ? `<div class="grid">${mine.map(card).join('')}</div>` : '<p>You have not started a course yet. <a href="#/courses">Find a course</a></p>'}
+  <p style="margin-top:28px"><button class="alt" id="reset" style="color:var(--ink)">Reset my progress</button></p>
   ${certs.length ? `<h2 style="margin-top:32px">My certificates</h2><ul class="list">${certs.map(c => `<li>${esc(c.title)}<span class="tag"><a href="#/cert/${c.id}">Open</a></span></li>`).join('')}</ul>` : ''}`;
+  $('#reset').onclick = () => { if (confirm('Delete all your saved progress and certificates on this device?')) { S.enr = {}; save(); render(); } };
 }
 
 function certPage(c) {
@@ -359,44 +363,5 @@ function certPage(c) {
 addEventListener('hashchange', render);
 render();
 </script>
-</body>
-</html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SkillBridge | Free digital skills courses</title>
-<meta name="description" content="Free video courses in design, coding, marketing and IT, with certificates.">
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css">
-</head>
-<body>
-<header>
-  <a class="logo" href="#/">Skill<span>Bridge</span></a>
-  <a href="#/courses">Courses</a>
-  <a href="#/dashboard">My learning</a>
-  <span id="auth"></span>
-</header>
-<main id="app"></main>
-<footer>SkillBridge is a fictional program built for a college coursework project.</footer>
-
-<div class="modal" id="modal" hidden>
-  <form id="authForm">
-    <div class="tabs">
-      <button type="button" id="tLogin" class="on">Log in</button>
-      <button type="button" id="tSign">Sign up</button>
-    </div>
-    <button type="button" class="alt" id="gBtn" style="width:100%;color:var(--ink)">Continue with Google</button>
-    <p class="tag" style="text-align:center">or use your email</p>
-    <div id="nameRow" hidden><label>Full name (printed on your certificate)<input id="fName" autocomplete="name"></label></div>
-    <label>Email<input id="fEmail" type="email" required autocomplete="email"></label>
-    <label>Password (6+ characters)<input id="fPass" type="password" required minlength="6" autocomplete="current-password"></label>
-    <div class="err" id="err" role="alert"></div>
-    <button id="fGo">Log in</button>
-    <button type="button" class="alt" id="fCancel" style="color:var(--ink);margin-left:8px">Cancel</button>
-    <p><a href="#" id="forgot">Forgot your password?</a></p>
-  </form>
-</div>
-<script type="module" src="js/app.js"></script>
 </body>
 </html>
