@@ -1,13 +1,12 @@
-const SUPABASE_URL = 'https://wqnxihaxtyafwgyymqit.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_xxxxxxxxxxxxxxxx';/* SkillBridge EXTRAS (Supabase version): real login, shared database, admin dashboard, profile page, light/dark mode.
+/* SkillBridge EXTRAS (Supabase version): real login, shared database, admin dashboard, profile page, light/dark mode.
    Needs ONE line in <head> of index.html:  <script src="extras.js"></script>
    Fill in the two Supabase values below. */
 (function () {
   'use strict';
 
   /* ---------- 1. YOUR SUPABASE SETTINGS (Project Settings > API) ---------- */
-  const SUPABASE_URL = 'PASTE_PROJECT_URL_HERE';        // looks like https://abcdxyz.supabase.co
-  const SUPABASE_KEY = 'PASTE_ANON_PUBLIC_KEY_HERE';    // the long "anon public" key (safe to put here)
+  const SUPABASE_URL = 'https://wqnxihaxtyafwgyymqit.supabase.co';        // looks like https://abcdxyz.supabase.co
+  const SUPABASE_KEY = 'sb_publishable_XudcdJcrd7Qn-2bco_yOhg_wDkry1Ti';    // the long "anon public" key (safe to put here)
   const REQUIRE_LOGIN_TO_LEARN = true;                  // true = visitors must log in before watching a course
 
   const CONFIGURED = /^https:\/\/[\w-]+\.supabase\.co/.test(SUPABASE_URL) && SUPABASE_KEY.length > 40;
