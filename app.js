@@ -1,6 +1,6 @@
-/* SkillBridge, no-database version: progress is saved in this browser (localStorage). */
+/* SkillBridge, no-database version: progress is saved in this browser (localStorage). One YouTube link per course. */
 import { COURSES } from './courses.js';
-import { ytId } from './youtube.js';
+import { ytInfo } from './youtube.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -11,11 +11,10 @@ const S = { enr: ls('sb_enr', {}), name: ls('sb_name', '') };
 const F = { q: '', cat: 'All' };
 const CATS = ['All', ...new Set(COURSES.map(c => c.cat))];
 const course = id => COURSES.find(c => c.id === id);
-const mins = c => c.videos.reduce((a, x) => a + x.m, 0);
 const save = () => st('sb_enr', S.enr);
-let player = null, CUR = { cid: null, i: 0 };
+let player = null, CUR = { cid: null, i: 0 }, IDS = [], FALLBACK = false;
 
-COURSES.forEach(c => c.videos.forEach(x => x.id = ytId(x.y)));   // read every link once
+COURSES.forEach(c => c.yt = ytInfo(c.link));   // read each course link once
 
 /* YouTube IFrame API */
 const ytReady = new Promise(r => window.onYouTubeIframeAPIReady = r);
@@ -43,8 +42,11 @@ function askName() {
 }
 
 /* ---------- Pages ---------- */
-const bar = (c, big) => { const d = (S.enr[c.id] || {}).done || []; return `<div class="span ${big ? 'big' : ''}" role="img" aria-label="${d.length} of ${c.videos.length} videos done">${c.videos.map((_, i) => `<i class="${d.includes(i) ? 'on' : ''}"></i>`).join('')}</div>`; };
-const card = c => `<div class="card"><div class="ico">${c.ico}</div><h3>${c.title}</h3><p class="tag">${c.cat} · ${c.level} · ${c.videos.length} videos · ${mins(c)} min</p><p>${c.desc}</p>${S.enr[c.id] ? bar(c) : ''}<a class="btn" href="#/course/${c.id}">${S.enr[c.id] ? 'Continue' : 'View course'}</a></div>`;
+const bar = (c, big) => {
+  const e = S.enr[c.id] || {}, n = e.total || 1, d = e.done || [];
+  return `<div class="span ${big ? 'big' : ''}" role="img" aria-label="${d.length} of ${e.total || 'all'} videos done">${Array.from({ length: n }, (_, i) => `<i class="${d.includes(i) ? 'on' : ''}"></i>`).join('')}</div>`;
+};
+const card = c => `<div class="card"><div class="ico">${c.ico}</div><h3>${c.title}</h3><p class="tag">${c.cat} · ${c.level} · ${c.len}</p><p>${c.desc}</p>${S.enr[c.id] ? bar(c) : ''}<a class="btn" href="#/course/${c.id}">${S.enr[c.id] ? 'Continue' : 'View course'}</a></div>`;
 
 function home() {
   $('#app').innerHTML = `<section class="hero"><h1>Learn a digital skill. Get hired.</h1><p>Free video courses for young people looking for their first digital job. Watch the lessons right here and earn a certificate.</p><a class="btn" href="#/courses">Browse courses</a></section><h2>Popular courses</h2><div class="grid">${COURSES.slice(0, 3).map(card).join('')}</div>`;
@@ -52,24 +54,24 @@ function home() {
 
 function catalogue() {
   $('#app').innerHTML = `<h1>All courses</h1><div class="bar"><input id="q" type="search" placeholder="Search courses" aria-label="Search courses" value="${esc(F.q)}">${CATS.map(k => `<button class="chip ${k === F.cat ? 'on' : ''}" data-c="${k}">${k}</button>`).join('')}</div><div class="grid" id="grid"></div>`;
-  const paint = () => {
+  const paintGrid = () => {
     const l = COURSES.filter(c => (F.cat === 'All' || c.cat === F.cat) && (c.title + c.desc).toLowerCase().includes(F.q.toLowerCase()));
     $('#grid').innerHTML = l.length ? l.map(card).join('') : '<p>No course matches your search. Try a different word or category.</p>';
   };
-  paint();
-  $('#q').oninput = e => { F.q = e.target.value; paint(); };
+  paintGrid();
+  $('#q').oninput = e => { F.q = e.target.value; paintGrid(); };
   document.querySelectorAll('.chip').forEach(b => b.onclick = () => { F.cat = b.dataset.c; catalogue(); });
 }
 
 function detail(c) {
   if (!c) return location.hash = '#/courses';
   const e = S.enr[c.id];
-  $('#app').innerHTML = `<h1>${c.ico} ${c.title}</h1><p class="tag">${c.cat} · ${c.level} · by ${esc(c.by)} · ${mins(c)} min</p><p style="max-width:60ch">${c.desc}</p>
+  $('#app').innerHTML = `<h1>${c.ico} ${c.title}</h1><p class="tag">${c.cat} · ${c.level} · by ${esc(c.by)} · ${c.len}</p><p style="max-width:60ch">${c.desc}</p>
   ${e ? bar(c, true) + (e.completed ? `<div class="banner"><strong>Course complete.</strong><a class="btn" href="#/cert/${c.id}">View certificate</a></div>` : '') : ''}
   <p><button id="go">${e ? (e.completed ? 'Watch again' : 'Continue learning') : 'Start course'}</button></p>
-  <h2>What you will learn</h2><ul class="list">${c.videos.map((x, i) => `<li class="${e && e.done.includes(i) ? 'ok' : ''}"><span class="n">${e && e.done.includes(i) ? '✓' : i + 1}</span>${esc(x.t)}<span class="tag">${x.m} min</span></li>`).join('')}</ul>`;
+  <h2>What you will learn</h2><ul class="list">${c.learn.map(t => `<li><span class="n">✓</span>${esc(t)}</li>`).join('')}</ul>`;
   $('#go').onclick = () => {
-    if (!e) { S.enr[c.id] = { course: c.title, done: [], total: c.videos.length, last: 0, completed: false, enrolledAt: new Date().toISOString() }; save(); }
+    if (!e) { S.enr[c.id] = { course: c.title, done: [], total: c.yt && c.yt.list ? 0 : 1, last: 0, completed: false, enrolledAt: new Date().toISOString() }; save(); }
     location.hash = '#/learn/' + c.id;
   };
 }
@@ -78,62 +80,85 @@ function detail(c) {
 function learn(c) {
   if (!c) return location.hash = '#/courses';
   if (!S.enr[c.id]) return location.hash = '#/course/' + c.id;
-  CUR = { cid: c.id, i: Math.min(S.enr[c.id].last || 0, c.videos.length - 1) };
-  $('#app').innerHTML = `<p><a href="#/course/${c.id}">← ${esc(c.title)}</a></p><h1 id="vt"></h1><div id="prog"></div>
+  CUR = { cid: c.id, i: S.enr[c.id].last || 0 };
+  IDS = []; FALLBACK = false;
+  $('#app').innerHTML = `<p><a href="#/course/${c.id}">← ${esc(c.title)}</a></p><h1>${esc(c.title)}</h1><p class="tag" id="lesson"></p><div id="prog"></div>
   <div class="play"><div><div class="vid"><div id="player"></div></div><p class="err" id="verr" role="alert"></p>
-  <p><button id="mark">Mark this video as done</button> <span class="tag">The next lesson starts automatically when a video ends.</span></p></div>
-  <div><h3>Playlist</h3><ul class="list pick" id="pl"></ul></div></div>`;
+  <p><button id="mark"></button> <span class="tag">Videos in a playlist play one after another.</span></p></div>
+  <div><h3>Videos in this course</h3><ul class="list pick" id="pl"></ul></div></div>`;
   paint(c);
-  $('#mark').onclick = () => complete(CUR.i);
+  $('#mark').onclick = () => FALLBACK ? finishAll(c) : complete(CUR.i);
   mount(c);
 }
 
 function mount(c) {
-  const x = c.videos[CUR.i];
-  if (!x.id) { $('.vid').innerHTML = '<p style="color:#fff;padding:20px">This lesson\'s YouTube link is not valid. Check it in js/courses.js.</p>'; return; }
-  const fallback = () => { if ($('.vid')) $('.vid').innerHTML = `<iframe style="border:0" src="https://www.youtube-nocookie.com/embed/${x.id}?rel=0&playsinline=1" title="${esc(x.t)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`; };
+  const info = c.yt;
+  if (!info) { $('.vid').innerHTML = '<p style="color:#fff;padding:20px">This course\'s YouTube link is not valid. Check the link in js/courses.js.</p>'; $('#mark').hidden = true; return; }
+  if (info.id) { IDS = [info.id]; paint(c); }
+  const fallback = () => {
+    if (!$('.vid')) return;
+    FALLBACK = true;
+    const src = info.list ? `https://www.youtube-nocookie.com/embed/videoseries?list=${info.list}&rel=0` : `https://www.youtube-nocookie.com/embed/${info.id}?rel=0`;
+    $('.vid').innerHTML = `<iframe style="border:0" src="${src}" title="${esc(c.title)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
+    paint(c);
+  };
   Promise.race([ytReady, new Promise(r => setTimeout(r, 5000))]).then(() => {
     if (!$('#player')) return;                                    // user left the page
-    if (!window.YT || !window.YT.Player) return fallback();       // API blocked or slow: plain embed
+    if (!window.YT || !window.YT.Player) return fallback();       // YouTube script blocked or slow: plain embed
+    const vars = { rel: 0, modestbranding: 1, playsinline: 1 };
+    const cfg = info.list ? { playerVars: { ...vars, listType: 'playlist', list: info.list, index: CUR.i } } : { videoId: info.id, playerVars: vars };
     player = new YT.Player('player', {
-      width: '100%', height: '100%', videoId: x.id,
-      playerVars: { rel: 0, modestbranding: 1, playsinline: 1 },
+      width: '100%', height: '100%', ...cfg,
       events: {
-        onStateChange: ev => { if (ev.data === 0) onEnd(); },
-        onError: () => { $('#verr').textContent = 'This video cannot be played here. It may be private, removed, or the owner turned off embedding. Try another link.'; }
+        onReady: () => { if (info.list) loadList(c); },
+        onStateChange: ev => {
+          if (ev.data === 1) {                                    // a video started playing
+            if (info.list) CUR.i = Math.max(0, player.getPlaylistIndex());
+            S.enr[c.id].last = CUR.i; save(); paint(c);
+          }
+          if (ev.data === 0) complete(CUR.i);                     // a video ended
+        },
+        onError: () => { $('#verr').textContent = 'This video cannot be played here. It may be private, removed, or the owner turned off embedding.'; }
       }
     });
   });
 }
-function play(i) {
-  const c = course(CUR.cid);
-  CUR.i = i; S.enr[c.id].last = i; save();
-  $('#verr').textContent = '';
-  const id = c.videos[i].id;
-  if (player && player.loadVideoById && id) player.loadVideoById(id);
-  paint(c);
+function loadList(c, tries = 0) {                                  // ask the player which videos are in the playlist
+  const a = player && player.getPlaylist && player.getPlaylist();
+  if (a && a.length) { IDS = a; setTotal(c, a.length); }
+  else if (tries < 20) setTimeout(() => loadList(c, tries + 1), 500);
 }
-function onEnd() {
-  const c = course(CUR.cid);
-  complete(CUR.i);
-  if (CUR.i < c.videos.length - 1) play(CUR.i + 1);
+function setTotal(c, n) {
+  const e = S.enr[c.id];
+  e.total = n; e.done = e.done.filter(i => i < n);
+  if (e.done.length >= n && !e.completed) finish(e);
+  save(); paint(c);
+}
+function finish(e) { e.completed = true; e.certId = 'SB-' + Date.now().toString(36).toUpperCase(); e.completedAt = new Date().toISOString(); }
+function complete(i) {
+  const c = course(CUR.cid), e = S.enr[c.id];
+  if (!e.total || e.done.includes(i)) return;
+  e.done.push(i);
+  if (e.done.length >= e.total && !e.completed) finish(e);
+  save(); paint(c);
+}
+function finishAll(c) {                                            // used only when YouTube's script is blocked
+  const e = S.enr[c.id]; e.total = e.total || 1;
+  e.done = Array.from({ length: e.total }, (_, i) => i);
+  if (!e.completed) finish(e);
+  save(); paint(c);
 }
 function paint(c) {
   const e = S.enr[c.id];
-  $('#vt').textContent = c.videos[CUR.i].t;
+  $('#lesson').textContent = FALLBACK ? 'Use the playlist inside the video player.' : `Video ${CUR.i + 1} of ${e.total || '…'}`;
+  $('#mark').textContent = FALLBACK ? 'I finished this course' : 'Mark this video as done';
   $('#prog').innerHTML = bar(c, true) + (e.completed ? `<div class="banner"><strong>Course complete.</strong> Your certificate is ready.<a class="btn" href="#/cert/${c.id}">View certificate</a></div>` : '');
-  $('#pl').innerHTML = c.videos.map((x, i) => `<li tabindex="0" data-i="${i}" class="${i === CUR.i ? 'cur' : ''} ${e.done.includes(i) ? 'ok' : ''}"><span class="n">${e.done.includes(i) ? '✓' : i + 1}</span>${x.id ? `<img src="https://i.ytimg.com/vi/${x.id}/default.jpg" alt="" width="64" style="border-radius:4px">` : ''}<span>${esc(x.t)}</span><span class="tag">${x.m} min</span></li>`).join('');
-  document.querySelectorAll('#pl li').forEach(li => {
-    li.onclick = () => play(+li.dataset.i);
-    li.onkeydown = ev => { if (ev.key === 'Enter') play(+li.dataset.i); };
+  $('#pl').innerHTML = FALLBACK ? '<li>The video list is inside the player above.</li>' : IDS.length ? IDS.map((id, i) =>
+    `<li tabindex="0" data-i="${i}" class="${i === CUR.i ? 'cur' : ''} ${e.done.includes(i) ? 'ok' : ''}"><span class="n">${e.done.includes(i) ? '✓' : i + 1}</span><img src="https://i.ytimg.com/vi/${id}/default.jpg" alt="" width="64" style="border-radius:4px"><span>Video ${i + 1}</span></li>`).join('') : '<li>Loading videos…</li>';
+  document.querySelectorAll('#pl li[data-i]').forEach(li => {
+    const go = () => { const i = +li.dataset.i; if (c.yt.list && player && player.playVideoAt) { CUR.i = i; player.playVideoAt(i); paint(c); } };
+    li.onclick = go; li.onkeydown = ev => { if (ev.key === 'Enter') go(); };
   });
-}
-function complete(i) {
-  const c = course(CUR.cid), e = S.enr[c.id];
-  if (e.done.includes(i)) return;
-  e.done.push(i);
-  if (e.done.length === c.videos.length) { e.completed = true; e.certId = 'SB-' + Date.now().toString(36).toUpperCase(); e.completedAt = new Date().toISOString(); }
-  save(); paint(c);
 }
 
 /* ---------- Dashboard and certificate ---------- */
