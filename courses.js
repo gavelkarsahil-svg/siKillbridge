@@ -1,22 +1,43 @@
-// v(title, youtubeVideoId, minutes). Replace each VIDEO_ID with the part after v= in a YouTube link.
-// To add a course, copy one block, give it a new unique id and edit the text.
-const v = (t, y, m) => ({ t, y, m });
+// ONE YOUTUBE LINK PER COURSE
+// Paste your link in the `link` line of each course. It can be:
+//   - a playlist link  (https://www.youtube.com/playlist?list=PL...)  -> every video in the playlist is shown as a lesson
+//   - a single video   (https://www.youtube.com/watch?v=... or https://youtu.be/...)  -> the course is that one video
+// `len` and `learn` are only the text shown on the course page. Edit them to match your video.
 
 export const COURSES = [
-  { id: 'design', ico: '🎨', cat: 'Design', level: 'Beginner', by: 'Your instructor name',
+  { id: 'graphic-design', ico: '🎨', cat: 'Design', level: 'Beginner', by: 'Your instructor name', len: 'About 4 hours',
     title: 'Graphic design fundamentals',
     desc: 'Learn layout, colour and typography, then design a logo you can put in a portfolio.',
-    videos: [v('Design basics', 'VIDEO_ID', 12), v('Colour and type', 'VIDEO_ID', 15), v('Build a logo', 'VIDEO_ID', 20)] },
-  { id: 'web', ico: '💻', cat: 'Development', level: 'Beginner', by: 'Your instructor name',
-    title: 'Web development from zero',
+    learn: ['Layout and composition', 'Colour and typography', 'Working with images', 'Designing a logo'],
+    link: 'PASTE_YOUTUBE_LINK_HERE' },
+
+  { id: 'web-development', ico: '💻', cat: 'Development', level: 'Beginner', by: 'Your instructor name', len: 'About 6 hours',
+    title: 'Web development and coding',
     desc: 'HTML, CSS and JavaScript step by step, finishing with a live website on GitHub Pages.',
-    videos: [v('HTML in 20 minutes', 'VIDEO_ID', 20), v('Styling with CSS', 'VIDEO_ID', 25), v('First JavaScript', 'VIDEO_ID', 30), v('Publish on GitHub', 'VIDEO_ID', 10)] },
-  { id: 'marketing', ico: '📣', cat: 'Marketing', level: 'Beginner', by: 'Your instructor name',
-    title: 'Digital marketing essentials',
+    learn: ['HTML structure', 'Styling with CSS', 'JavaScript basics', 'Publishing a website'],
+    link: 'PASTE_YOUTUBE_LINK_HERE' },
+
+  { id: 'digital-marketing', ico: '📣', cat: 'Marketing', level: 'Beginner', by: 'Your instructor name', len: 'About 4 hours',
+    title: 'Digital marketing',
     desc: 'Plan social, search and email campaigns and read the numbers that show what works.',
-    videos: [v('The marketing funnel', 'VIDEO_ID', 14), v('Social media plan', 'VIDEO_ID', 18), v('Read your analytics', 'VIDEO_ID', 16)] },
-  { id: 'it', ico: '🛠️', cat: 'IT', level: 'Intermediate', by: 'Your instructor name',
-    title: 'IT support and security',
-    desc: 'Troubleshoot computers, understand networks and keep users safe online.',
-    videos: [v('How computers work', 'VIDEO_ID', 17), v('Networking basics', 'VIDEO_ID', 22), v('Stay secure', 'VIDEO_ID', 15)] }
+    learn: ['The marketing funnel', 'Social media plans', 'Search and SEO basics', 'Reading analytics'],
+    link: 'PASTE_YOUTUBE_LINK_HERE' },
+
+  { id: 'ui-ux-design', ico: '📱', cat: 'Design', level: 'Beginner', by: 'Your instructor name', len: 'About 5 hours',
+    title: 'UI and UX design',
+    desc: 'Research users, sketch wireframes and design app screens people find easy to use.',
+    learn: ['User research', 'Wireframes', 'Visual interface design', 'Prototyping in Figma'],
+    link: 'PASTE_YOUTUBE_LINK_HERE' },
+
+  { id: 'cyber-security', ico: '🔒', cat: 'Security', level: 'Beginner', by: 'Your instructor name', len: 'About 4 hours',
+    title: 'Cyber security fundamentals',
+    desc: 'Understand common attacks and learn the habits that keep people and systems safe.',
+    learn: ['Common cyber attacks', 'Passwords and phishing', 'Malware and protection', 'Staying safe online'],
+    link: 'PASTE_YOUTUBE_LINK_HERE' },
+
+  { id: 'it-networking', ico: '🛠️', cat: 'IT', level: 'Intermediate', by: 'Your instructor name', len: 'About 5 hours',
+    title: 'IT support and networking',
+    desc: 'Troubleshoot computers, understand how networks work and help users solve problems.',
+    learn: ['How computers work', 'Networking basics', 'Troubleshooting steps', 'Helping users'],
+    link: 'PASTE_YOUTUBE_LINK_HERE' }
 ];
