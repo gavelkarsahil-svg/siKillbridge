@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SkillBridge | Free digital skills courses</title>
+<meta name="description" content="Free video courses in design, coding, marketing and IT, with certificates.">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <a class="logo" href="#/">Skill<span>Bridge</span></a>
+  <a href="#/courses">Courses</a>
+  <a href="#/dashboard">My learning</a>
+  <span id="auth"></span>
+</header>
+<main id="app"></main>
+<footer>SkillBridge is a fictional program built for a college coursework project.</footer>
+
+<div class="modal" id="modal" hidden>
+  <form id="authForm">
+    <div class="tabs">
+      <button type="button" id="tLogin" class="on">Log in</button>
+      <button type="button" id="tSign">Sign up</button>
+    </div>
+    <button type="button" class="alt" id="gBtn" style="width:100%;color:var(--ink)">Continue with Google</button>
+    <p class="tag" style="text-align:center">or use your email</p>
+    <div id="nameRow" hidden><label>Full name (printed on your certificate)<input id="fName" autocomplete="name"></label></div>
+    <label>Email<input id="fEmail" type="email" required autocomplete="email"></label>
+    <label>Password (6+ characters)<input id="fPass" type="password" required minlength="6" autocomplete="current-password"></label>
+    <div class="err" id="err" role="alert"></div>
+    <button id="fGo">Log in</button>
+    <button type="button" class="alt" id="fCancel" style="color:var(--ink);margin-left:8px">Cancel</button>
+    <p><a href="#" id="forgot">Forgot your password?</a></p>
+  </form>
+</div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
